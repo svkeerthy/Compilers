@@ -44,10 +44,10 @@ using namespace llvm;
 
 
 namespace{
-	struct Flattening : public LoopPass{
+	struct Flattening : public FunctionPass{
 
 		static char ID;
-		Flattening():LoopPass(ID){}
+		Flattening():FunctionPass(ID){}
 
 		void getAnalysisUsage(AnalysisUsage &AU) const{
 			AU.addRequired<LoopInfoWrapperPass>();
@@ -99,9 +99,17 @@ namespace{
 		}
 
 
+        bool runOnFunction(Function& F) override {
+            LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+            bool check = false;
+            for (Loop *L : LI){
+                check = changeLoop(L);
+            }
+            return check;
 
+        }
 
-		bool runOnLoop(Loop *L , LPPassManager & LPM) override{
+		bool changeLoop(Loop *L) {
 			// Loop is currently not the outermost loop
 			if (L->getSubLoops().size()>0){
 				dbgs()<<"Hi";
@@ -123,8 +131,8 @@ namespace{
 			RandInstructions.push_back((Value *) CallInst::Create((Value *)randFunc,ArrayRef<Value *>(),"randCall"));
 			RandInstructions.push_back((Value *) BinaryOperator::Create(Instruction::SRem,RandInstructions[3],(Value *)ConstantInt::get(IntegerType::get(F->getContext(),32),4,false),"randomNumber"));
 			
-			auto &DT  = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-			LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+			// auto &DT  = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+			// LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 			//LI.erase(L);			
 			dbgs() <<"hello";
 			//LI.removeLoop(L);
@@ -151,20 +159,20 @@ namespace{
 
 			AlterPreHeader(PreHeader,NewBlocks[3],HeaderBlock);
 			AlterHeaderBlock(HeaderBlock,NewBlocks[0],Body[0],endBlock,NewBlocks[2]);
-			AlterBody(Body,Latch,NewBlocks[1],Updates);
+			AlterBody(Body,Latch,NewBlocks[1]);
 			PreHeader->dump();
-			Updates.push_back({DominatorTree::Insert,NewBlocks[0],Body[0]});
-			Updates.push_back({DominatorTree::Insert,NewBlocks[1],Latch});
-			Updates.push_back({DominatorTree::Insert,NewBlocks[2],endBlock});
-			Updates.push_back({DominatorTree::Insert,NewBlocks[0],HeaderBlock});
-			Updates.push_back({DominatorTree::Insert,NewBlocks[1],HeaderBlock});
-			Updates.push_back({DominatorTree::Insert,NewBlocks[2],HeaderBlock});
-			Updates.push_back({DominatorTree::Insert,PreHeader,NewBlocks[3]});
-			Updates.push_back({DominatorTree::Delete,HeaderBlock,Body[0]});
-			Updates.push_back({DominatorTree::Delete,HeaderBlock,endBlock});
-			Updates.push_back({DominatorTree::Delete,PreHeader,HeaderBlock});
+			// Updates.push_back({DominatorTree::Insert,NewBlocks[0],Body[0]});
+			// Updates.push_back({DominatorTree::Insert,NewBlocks[1],Latch});
+			// Updates.push_back({DominatorTree::Insert,NewBlocks[2],endBlock});
+			// Updates.push_back({DominatorTree::Insert,NewBlocks[0],HeaderBlock});
+			// Updates.push_back({DominatorTree::Insert,NewBlocks[1],HeaderBlock});
+			// Updates.push_back({DominatorTree::Insert,NewBlocks[2],HeaderBlock});
+			// Updates.push_back({DominatorTree::Insert,PreHeader,NewBlocks[3]});
+			// Updates.push_back({DominatorTree::Delete,HeaderBlock,Body[0]});
+			// Updates.push_back({DominatorTree::Delete,HeaderBlock,endBlock});
+			// Updates.push_back({DominatorTree::Delete,PreHeader,HeaderBlock});
 
-			DT.applyUpdates(Updates);
+			// DT.applyUpdates(Updates);
 
 
 			for (int i= 0 ;i<3;i++){
@@ -178,19 +186,19 @@ namespace{
 			}
 			F->viewCFG();
 
-			DT.viewGraph();
-			L->removeBlockFromLoop(HeaderBlock);
-			dbgs()<<"he";
-			L->removeBlockFromLoop(Latch);
-			dbgs()<<"he";
-			L->removeBlockFromLoop(PreHeader);
-			dbgs()<<"he";
-			L->removeBlockFromLoop(Body[0]);
-			for (LoopInfo::iterator i = LI.begin();i!=LI.end();i++){
-				if (*i == L){
-					LI.removeLoop(i);
-				}
-			}
+			// DT.viewGraph();
+			// L->removeBlockFromLoop(HeaderBlock);
+			// dbgs()<<"he";
+			// L->removeBlockFromLoop(Latch);
+			// dbgs()<<"he";
+			// L->removeBlockFromLoop(PreHeader);
+			// dbgs()<<"he";
+			// L->removeBlockFromLoop(Body[0]);
+			// for (LoopInfo::iterator i = LI.begin();i!=LI.end();i++){
+			// 	if (*i == L){
+			// 		LI.removeLoop(i);
+			// 	}
+			// }
 			//LI.removeLoop(L);
 			return true;
 
@@ -237,26 +245,26 @@ namespace{
 			}
 		}
 
-		void AlterBody(SmallVector<BasicBlock * , 10> Body , BasicBlock * Latch , BasicBlock * preLatch , SmallVector<DominatorTree::UpdateType , 10> &Updates){
+		void AlterBody(SmallVector<BasicBlock * , 10> Body , BasicBlock * Latch , BasicBlock * preLatch ){
 			for (unsigned i=0;i<Body.size();i++){
 				if (BranchInst * branch = dyn_cast<BranchInst>(Body[i]->getTerminator())){
 					if(branch->isConditional()){
 						if (branch->getSuccessor(0) == Latch){
 							branch->setSuccessor(0, preLatch);
-							Updates.push_back({DominatorTree::Delete,Body[i],Latch});
-							Updates.push_back({DominatorTree::Insert,Body[i],preLatch});
+							// Updates.push_back({DominatorTree::Delete,Body[i],Latch});
+							// Updates.push_back({DominatorTree::Insert,Body[i],preLatch});
 						}
 						if (branch->getSuccessor(1) == Latch){
 							branch->setSuccessor(0 , preLatch);
-							Updates.push_back({DominatorTree::Delete,Body[i],Latch});
-							Updates.push_back({DominatorTree::Insert,Body[i],preLatch});
+							// Updates.push_back({DominatorTree::Delete,Body[i],Latch});
+							// Updates.push_back({DominatorTree::Insert,Body[i],preLatch});
 						}
 					}
 					else if  (branch->isUnconditional()){
 						if (branch->getSuccessor(0) == Latch){
 							branch->setSuccessor(0,preLatch);
-							Updates.push_back({DominatorTree::Delete,Body[i],Latch});
-							Updates.push_back({DominatorTree::Insert,Body[i],preLatch});
+							// Updates.push_back({DominatorTree::Delete,Body[i],Latch});
+							// Updates.push_back({DominatorTree::Insert,Body[i],preLatch});
 						}
 					}
 				}
